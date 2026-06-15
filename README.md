@@ -2,6 +2,13 @@
 
 A production-oriented reference on Retrieval-Augmented Generation: architecture, system design, tradeoffs, and engineering decisions.
 
+--
+
+## Project Snapshots
+<img width="1920" height="1080" alt="Screenshot from 2026-06-15 23-34-05" src="https://github.com/user-attachments/assets/d7b38ec0-f050-43f3-90b6-c1fa95aeceb2" />
+<img width="1920" height="1080" alt="Screenshot from 2026-06-15 23-37-41" src="https://github.com/user-attachments/assets/0e6dbd94-4615-4beb-9f0e-a0845ae159a8" />
+
+
 ---
 
 ## Table of Contents
