@@ -1,0 +1,7 @@
+ragenv/
+.env
+.env.bak
+__pycache__/
+*.pyc
+faiss_index_dummy/
+faiss_index_ollama/

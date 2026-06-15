@@ -1,0 +1,14 @@
+flask
+flask-cors
+python-dotenv
+faiss-cpu
+pypdf
+langchain
+langchain-community
+langchain-core
+langchain-text-splitters
+langchain-openai
+langchain-ollama
+langchain-google-genai
+google-generativeai
+edge-tts
