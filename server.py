@@ -30,7 +30,7 @@ elif gemini_key:
     print("🌟 Running in GEMINI Cloud Mode")
     from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
     embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", google_api_key=gemini_key)
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.5, google_api_key=gemini_key)
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.5, google_api_key=gemini_key)
     model_name = "gemini"
 elif openai_key:
     print("🌟 Running in OPENAI Cloud Mode")
