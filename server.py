@@ -17,7 +17,16 @@ from flask_cors import CORS
 openai_key = os.environ.get("OPENAI_API_KEY")
 gemini_key = os.environ.get("GEMINI_API_KEY")
 
-if gemini_key:
+if os.environ.get("VERCEL") and not gemini_key and not openai_key:
+    print("⚠️ Running on Vercel without API keys. Defaulting to mock/dummy mode to prevent crash.")
+    from langchain_core.embeddings import FakeEmbeddings
+    from langchain_core.runnables import RunnableLambda
+    embeddings = FakeEmbeddings(size=768)
+    def _dummy_invoke(prompt):
+        return "I'm running in lightweight local mode. Please configure your GEMINI_API_KEY or OPENAI_API_KEY in the Vercel dashboard."
+    llm = RunnableLambda(_dummy_invoke)
+    model_name = "dummy"
+elif gemini_key:
     print("🌟 Running in GEMINI Cloud Mode")
     from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
     embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", google_api_key=gemini_key)
@@ -46,52 +55,58 @@ if os.path.exists(FAISS_PATH):
     print(f" Loading existing FAISS index from {FAISS_PATH}...")
     vector_store = FAISS.load_local(FAISS_PATH, embeddings, allow_dangerous_deserialization=True)
 else:
-    print(f" Building FAISS index from scratch at {FAISS_PATH}...")
-    from langchain_community.document_loaders import PyPDFLoader
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    if os.environ.get("VERCEL"):
+        print(f"⚠️ FAISS_PATH {FAISS_PATH} not found on Vercel. Creating a lightweight mock index to allow server boot...")
+        from langchain_core.documents import Document
+        fallback_docs = [Document(page_content="Error: The FAISS vector database is missing. Please compile the index locally and push it to Git.")]
+        vector_store = FAISS.from_documents(fallback_docs, embeddings)
+    else:
+        print(f" Building FAISS index from scratch at {FAISS_PATH}...")
+        from langchain_community.document_loaders import PyPDFLoader
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-    pdf_files = glob.glob(os.path.join(BASE_DIR, "data/*.pdf"))
-    if not pdf_files:
-        raise FileNotFoundError("No PDF files found in data/ directory!")
-    
-    documents = []
-    for pdf in pdf_files:
-        print(f"Loading {pdf}...")
-        loader = PyPDFLoader(pdf)
-        documents.extend(loader.load())
+        pdf_files = glob.glob(os.path.join(BASE_DIR, "data/*.pdf"))
+        if not pdf_files:
+            raise FileNotFoundError("No PDF files found in data/ directory!")
+        
+        documents = []
+        for pdf in pdf_files:
+            print(f"Loading {pdf}...")
+            loader = PyPDFLoader(pdf)
+            documents.extend(loader.load())
 
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    all_chunks = splitter.split_documents(documents)
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        all_chunks = splitter.split_documents(documents)
 
-    # Filter out tiny junk chunks (section headers, blank pages, etc.)
-    document_chunks = [c for c in all_chunks if len(c.page_content.strip()) > 80]
-    print(f"   Kept {len(document_chunks)} of {len(all_chunks)} chunks (filtered short/empty ones)")
+        # Filter out tiny junk chunks (section headers, blank pages, etc.)
+        document_chunks = [c for c in all_chunks if len(c.page_content.strip()) > 80]
+        print(f"   Kept {len(document_chunks)} of {len(all_chunks)} chunks (filtered short/empty ones)")
 
-    import time
-    batch_size = 50
-    vector_store = None
-    for i in range(0, len(document_chunks), batch_size):
-        batch = document_chunks[i:i+batch_size]
-        print(f"Embedding batch {i//batch_size + 1} of {(len(document_chunks) + batch_size - 1)//batch_size}...")
-        try:
-            if vector_store is None:
-                vector_store = FAISS.from_documents(batch, embeddings)
-            else:
-                vector_store.add_documents(batch)
-        except Exception as e:
-            # Handle rate-limit with retry once
-            print(f"Got error: {e}. Retrying in 65s...")
-            time.sleep(65)
-            if vector_store is None:
-                vector_store = FAISS.from_documents(batch, embeddings)
-            else:
-                vector_store.add_documents(batch)
-        if i + batch_size < len(document_chunks):
-            print("Sleeping for 61s to respect API rate limits...")
-            time.sleep(61)
+        import time
+        batch_size = 50
+        vector_store = None
+        for i in range(0, len(document_chunks), batch_size):
+            batch = document_chunks[i:i+batch_size]
+            print(f"Embedding batch {i//batch_size + 1} of {(len(document_chunks) + batch_size - 1)//batch_size}...")
+            try:
+                if vector_store is None:
+                    vector_store = FAISS.from_documents(batch, embeddings)
+                else:
+                    vector_store.add_documents(batch)
+            except Exception as e:
+                # Handle rate-limit with retry once
+                print(f"Got error: {e}. Retrying in 65s...")
+                time.sleep(65)
+                if vector_store is None:
+                    vector_store = FAISS.from_documents(batch, embeddings)
+                else:
+                    vector_store.add_documents(batch)
+            if i + batch_size < len(document_chunks):
+                print("Sleeping for 61s to respect API rate limits...")
+                time.sleep(61)
 
-    vector_store.save_local(FAISS_PATH)
-    print("Index saved to disk.")
+        vector_store.save_local(FAISS_PATH)
+        print("Index saved to disk.")
     
 retriever = vector_store.as_retriever(
     search_type="similarity",
